@@ -2,3 +2,5 @@
 .DS_Store?
 /env
 /clean_data.csv
+__pycache__/
+notebook.ipynb

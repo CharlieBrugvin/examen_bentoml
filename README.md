@@ -1,2 +1,4 @@
 # Examen BentoML
 
+isntall  env : 
+
