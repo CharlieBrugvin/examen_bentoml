@@ -1,0 +1,20 @@
+service: "src.service:regression_model_service"
+
+description: "Predict the chance of admission of a student in a university"
+labels:
+  owner: "DataScientest"
+  project: "Admissions Prediction"
+
+docker:
+  dockerfile_template: "./Dockerfile.template"
+  base_image: python:3.8-slim
+
+include:
+  - src/service.py
+
+python:
+    packages:
+      - numpy
+      - scikit-learn
+      - bentoml
+      - pyJWT

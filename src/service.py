@@ -11,7 +11,7 @@ import numpy as np
 
 import bentoml
 from bentoml.io import JSON
-from bentoml.exceptions import BentoMLException
+from bentoml.exceptions import BentoMLException, InvalidArgument
 
 
 # ----- USER CREDENTIALS -----
@@ -35,7 +35,7 @@ JWT_ALGORITHM = "HS256"
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
-        if request.url.path == "predict":
+        if request.url.path == "/predict":
             token = request.headers.get("Authorization")
             if not token:
                 return JSONResponse(status_code=401, content={"detail": "Missing authentication token"})
@@ -68,12 +68,12 @@ regression_model_service.add_asgi_middleware(JWTAuthMiddleware)
 
 # utilities
 
-def create_jwt_token(user_id: str):
+def create_jwt_token(user_id: str, timedelta_before_exp_sec) -> str:
     """Create a JWT token for the user."""
     return jwt.encode(
         {
             "sub": user_id, 
-            "exp": datetime.now() + timedelta(hours=1)
+            "exp": datetime.now() + timedelta(seconds=timedelta_before_exp_sec)
         }, 
         JWT_SECRET_KEY, 
         algorithm=JWT_ALGORITHM
@@ -83,17 +83,33 @@ class UnauthorizedException(BentoMLException):
     """Custom exception for unauthorized access"""
     error_code = HTTPStatus.UNAUTHORIZED
 
+class InputLogin(BaseModel):
+    """Input model for login endpoint."""
+    username: str
+    password: str
+    timedelta_before_exp_sec: int = 3600
+
 # endpoint
 @regression_model_service.api(
-        input=JSON(), 
-        output=JSON()
+        input=JSON(pydantic_model=InputLogin), 
+        output=JSON(),
+        route='login'
 )
-def login(creds: dict) -> dict:
+def login(input: InputLogin) -> dict:
     """Responds with a JWT token if the username and password are valid."""
-    password, username = creds.get("password"), creds.get("username")
 
-    if username in USERS and USERS[username] == password:
-        token = create_jwt_token(username)
+
+    if not (0 < input.timedelta_before_exp_sec <= 3600):
+        raise InvalidArgument(
+            "timedelta_before_exp_sec must be between 1 and 3600 seconds"
+        )
+
+    if input.username in USERS and USERS[input.username] == input.password:
+        # Generate a JWT token for the user
+        token = create_jwt_token(
+            input.username, 
+            input.timedelta_before_exp_sec
+        )
         return {"token": token}
     else:
         raise UnauthorizedException("Invalid credentials")
